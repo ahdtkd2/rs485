@@ -5,7 +5,7 @@ from functools import reduce
 from collections import defaultdict
 
 MQTT_USERNAME = 'mqtt'
-MQTT_PASSWORD = 'diap4871'
+MQTT_PASSWORD = ''
 
 class Device:
     def __init__(self, device_name, device_id, device_subid, device_class, child_device, mqtt_discovery, optional_info):
