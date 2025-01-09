@@ -3,6 +3,7 @@ import re
 from json import dumps as json_dumps
 from functools import reduce
 from collections import defaultdict
+import json
 
 MQTT_USERNAME = 'mqtt'
 MQTT_PASSWORD = ''
