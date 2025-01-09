@@ -6,7 +6,7 @@ from collections import defaultdict
 import json
 
 MQTT_USERNAME = 'mqtt'
-MQTT_PASSWORD = ''
+MQTT_PASSWORD = 'mqttdiap'
 
 class Device:
     def __init__(self, device_name, device_id, device_subid, device_class, child_device, mqtt_discovery, optional_info):
