@@ -4,7 +4,7 @@ from json import dumps as json_dumps
 from functools import reduce
 from collections import defaultdict
 
-MQTT_USERNAME = 'SHOULD_BE_CHANGED'
+MQTT_USERNAME = 'mqtt'
 MQTT_PASSWORD = 'SHOULD_BE_CHANGED'
 
 class Device:
