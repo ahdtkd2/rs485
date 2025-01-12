@@ -189,13 +189,14 @@ optional_info = {'optimistic': 'false'}
 침실등     = wallpad.add_device(device_name = '침실등',  device_id = '0e', device_subid = '21', device_class = 'light', optional_info = optional_info)
 침실등2    = wallpad.add_device(device_name = '침실등2',  device_id = '0e', device_subid = '31', device_class = 'light', optional_info = optional_info)
 침실등3    = wallpad.add_device(device_name = '침실등3',  device_id = '0e', device_subid = '41', device_class = 'light', optional_info = optional_info)
-알파룸등    = wallpad.add_device(device_name = '알파룸등',  device_id = '0e', device_subid = '51', device_class = 'light', optional_info = optional_info)
+알파룸 = wallpad.add_device(device_name='끝방', device_id='0e', device_subid='5f', child_devices = ["알파룸등"], device_class='light', optional_info=optional_info)
+#알파룸등    = wallpad.add_device(device_name = '알파룸등',  device_id = '0e', device_subid = '51', device_class = 'light', optional_info = optional_info)
 거실등전체 = wallpad.add_device(device_name = '거실등 전체', device_id = '0e', device_subid = '1f', device_class = 'light', mqtt_discovery = False, child_device = [거실등1, 거실등2, 복도등])
-주방 = wallpad.add_device(device_name='주방', device_id='0e', device_subid='7f', child_devices = ["주방", "식탁"], device_class='light', optional_info=optional_info)
+주방 = wallpad.add_device(device_name='주방', device_id='0e', device_subid='7f', child_devices = ["주방등", "식탁등"], device_class='light', optional_info=optional_info)
 
 
 거실등전체.register_status(message_flag = '01', attr_name = 'availability', topic_class ='availability_topic', regex = r'()', process_func = lambda v: 'online')
-주방등전체.register_status(message_flag = '01', attr_name = 'availability', topic_class ='availability_topic', regex = r'()', process_func = lambda v: 'online')
+#주방전체.register_status(message_flag = '01', attr_name = 'availability', topic_class ='availability_topic', regex = r'()', process_func = lambda v: 'online')
 
 거실등1.register_status(message_flag = '81', attr_name = 'power', topic_class ='state_topic', regex = r'00(0[01])0[01]0[01]', process_func = lambda v: 'ON' if v == '01' else 'OFF')
 거실등2.register_status(message_flag = '81', attr_name = 'power', topic_class ='state_topic', regex = r'000[01](0[01])0[01]', process_func = lambda v: 'ON' if v == '01' else 'OFF')
@@ -203,10 +204,13 @@ optional_info = {'optimistic': 'false'}
 침실등.register_status( message_flag = '81', attr_name = 'power', topic_class ='state_topic', regex = r'00(0[01])', process_func = lambda v: 'ON' if v == '01' else 'OFF')
 침실등2.register_status( message_flag = '81', attr_name = 'power', topic_class ='state_topic', regex = r'00(0[01])', process_func = lambda v: 'ON' if v == '01' else 'OFF')
 침실등3.register_status( message_flag = '81', attr_name = 'power', topic_class ='state_topic', regex = r'00(0[01])', process_func = lambda v: 'ON' if v == '01' else 'OFF')
-알파룸등.register_status( message_flag = '81', attr_name = 'power', topic_class ='state_topic', regex = r'00(0[01])', process_func = lambda v: 'ON' if v == '01' else 'OFF')
+#알파룸등.register_status( message_flag = '81', attr_name = 'power', topic_class ='state_topic', regex = r'00(0[01])', process_func = lambda v: 'ON' if v == '01' else 'OFF')
 
 주방.register_status(message_flag='81', attr_name='power', topic_class='state_topic', regex=r'0[01](0[01])(0[01])', process_func=lambda v: 'ON' if v == '01' else 'OFF')
 주방.register_command(message_flag='41', attr_name='power', topic_class='command_topic', controll_id=['71','72'], process_func=lambda v: '01' if v == 'ON' else '00')
+
+끝방.register_status(message_flag='81', attr_name='power', topic_class='state_topic', regex=r'0[01](0[01])', process_func=lambda v: 'ON' if v == '01' else 'OFF')
+끝방.register_command(message_flag='41', attr_name='power', topic_class='command_topic', controll_id=['51'], process_func=lambda v: '01' if v == 'ON' else '00')
 
 거실등1.register_status(message_flag = 'c1', attr_name = 'power', topic_class ='state_topic', regex = r'00(0[01])', process_func = lambda v: 'ON' if v == '01' else 'OFF')
 거실등2.register_status(message_flag = 'c1', attr_name = 'power', topic_class ='state_topic', regex = r'00(0[01])', process_func = lambda v: 'ON' if v == '01' else 'OFF')
@@ -214,7 +218,7 @@ optional_info = {'optimistic': 'false'}
 침실등.register_status( message_flag = 'c1', attr_name = 'power', topic_class ='state_topic', regex = r'00(0[01])', process_func = lambda v: 'ON' if v == '01' else 'OFF')
 침실등2.register_status( message_flag = 'c1', attr_name = 'power', topic_class ='state_topic', regex = r'00(0[01])', process_func = lambda v: 'ON' if v == '01' else 'OFF')
 침실등3.register_status( message_flag = 'c1', attr_name = 'power', topic_class ='state_topic', regex = r'00(0[01])', process_func = lambda v: 'ON' if v == '01' else 'OFF')
-알파룸등.register_status( message_flag = 'c1', attr_name = 'power', topic_class ='state_topic', regex = r'00(0[01])', process_func = lambda v: 'ON' if v == '01' else 'OFF')
+#알파룸등.register_status( message_flag = 'c1', attr_name = 'power', topic_class ='state_topic', regex = r'00(0[01])', process_func = lambda v: 'ON' if v == '01' else 'OFF')
 #주방등1.register_status( message_flag = 'c1', attr_name = 'power', topic_class ='state_topic', regex = r'00(0[01])', process_func = lambda v: 'ON' if v == '01' else 'OFF')
 #주방등2.register_status( message_flag = 'c1', attr_name = 'power', topic_class ='state_topic', regex = r'00(0[01])', process_func = lambda v: 'ON' if v == '01' else 'OFF')
 
@@ -224,7 +228,7 @@ optional_info = {'optimistic': 'false'}
 침실등.register_command( message_flag = '41', attr_name = 'power', topic_class = 'command_topic', process_func = lambda v: '01' if v =='ON' else '00')
 침실등2.register_command( message_flag = '41', attr_name = 'power', topic_class = 'command_topic', process_func = lambda v: '01' if v =='ON' else '00')
 침실등3.register_command( message_flag = '41', attr_name = 'power', topic_class = 'command_topic', process_func = lambda v: '01' if v =='ON' else '00')
-알파룸등.register_command( message_flag = '41', attr_name = 'power', topic_class = 'command_topic', process_func = lambda v: '01' if v =='ON' else '00')
+#알파룸등.register_command( message_flag = '41', attr_name = 'power', topic_class = 'command_topic', process_func = lambda v: '01' if v =='ON' else '00')
 #주방등1.register_command( message_flag = '41', attr_name = 'power', topic_class = 'command_topic', process_func = lambda v: '01' if v =='ON' else '00')
 #주방등2.register_command( message_flag = '41', attr_name = 'power', topic_class = 'command_topic', process_func = lambda v: '01' if v =='ON' else '00')
 
