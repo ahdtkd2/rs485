@@ -190,7 +190,7 @@ optional_info = {'optimistic': 'false'}
 침실등2    = wallpad.add_device(device_name = '침실등2',  device_id = '0e', device_subid = '31', device_class = 'light', optional_info = optional_info)
 침실등3    = wallpad.add_device(device_name = '침실등3',  device_id = '0e', device_subid = '41', device_class = 'light', optional_info = optional_info)
 #알파룸등    = wallpad.add_device(device_name = '알파룸등',  device_id = '0e', device_subid = '51', device_class = 'light', optional_info = optional_info)
-알파룸 = wallpad.add_device(device_name='알파룸', device_id='0e', device_subid='5f', child_device = ["알파룸등"], device_class='light', optional_info=optional_info)
+알파룸 = wallpad.add_device(device_name='알파룸', device_id='0e', device_subid='51', child_device = ["알파룸등"], device_class='light', optional_info=optional_info)
 주방등1    = wallpad.add_device(device_name = '주방등1',  device_id = '0e', device_subid = '71', device_class = 'light', optional_info = optional_info)
 주방등2    = wallpad.add_device(device_name = '주방등2',  device_id = '0e', device_subid = '72', device_class = 'light', optional_info = optional_info)
 거실등전체 = wallpad.add_device(device_name = '거실등 전체', device_id = '0e', device_subid = '1f', device_class = 'light', mqtt_discovery = False, child_device = [거실등1, 거실등2, 복도등])
