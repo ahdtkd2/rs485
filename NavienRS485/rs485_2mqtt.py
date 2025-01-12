@@ -201,6 +201,7 @@ optional_info = {'optimistic': 'false'}
 
 
 알파룸.register_status(message_flag='81', attr_name='power', topic_class='state_topic', regex=r'0[01](0[01])', process_func=lambda v: 'ON' if v == '01' else 'OFF')
+알파룸.register_status(message_flag='c1', attr_name='power', topic_class='state_topic', regex=r'0[01](0[01])', process_func=lambda v: 'ON' if v == '01' else 'OFF')
 알파룸.register_command(message_flag='41', attr_name='power', topic_class='command_topic', process_func=lambda v: '01' if v == 'ON' else '00')
 
 거실등1.register_status(message_flag = '81', attr_name = 'power', topic_class ='state_topic', regex = r'00(0[01])0[01]0[01]', process_func = lambda v: 'ON' if v == '01' else 'OFF')
