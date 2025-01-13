@@ -195,9 +195,11 @@ optional_info = {'optimistic': 'false'}
 주방등2    = wallpad.add_device(device_name = '주방등2',  device_id = '0e', device_subid = '72', device_class = 'light', optional_info = optional_info)
 거실등전체 = wallpad.add_device(device_name = '거실등 전체', device_id = '0e', device_subid = '1f', device_class = 'light', mqtt_discovery = False, child_device = [거실등1, 거실등2, 복도등])
 주방등전체 = wallpad.add_device(device_name = '주방등 전체', device_id = '0e', device_subid = '7f', device_class = 'light', mqtt_discovery = False, child_device = [주방등1,주방등2])
+알파룸등전체 = wallpad.add_device(device_name = '알파룸등 전체', device_id = '0e', device_subid = '5f', device_class = 'light', mqtt_discovery = False, child_device = [알파룸등)
 
 거실등전체.register_status(message_flag = '01', attr_name = 'availability', topic_class ='availability_topic', regex = r'()', process_func = lambda v: 'online')
 주방등전체.register_status(message_flag = '01', attr_name = 'availability', topic_class ='availability_topic', regex = r'()', process_func = lambda v: 'online')
+알파룸등전체.register_status(message_flag = '01', attr_name = 'availability', topic_class ='availability_topic', regex = r'()', process_func = lambda v: 'online')
 
 
 #알파룸.register_status(message_flag='81', attr_name='power', topic_class='state_topic', regex=r'0[01](0[01])', process_func=lambda v: 'ON' if v == '01' else 'OFF')
