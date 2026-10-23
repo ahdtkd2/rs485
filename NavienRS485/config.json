@@ -1,0 +1,34 @@
+{
+  "name": "Navien Wallpad Controller with RS485(EW11)",
+  "version": "1.1.0",
+  "slug": "navien_wallpad",
+  "description": "Navien Wallpad Controller for Homeassistant (EW11 MQTT)",
+  "arch": ["armhf", "armv7", "aarch64", "amd64", "i386"],
+  "url": "https://github.com/ahdtkd2/rs485",
+  "startup": "application",
+  "boot": "auto",
+  "options": {
+    "MQTT": {
+      "server": "192.168.10.234",
+      "port": 1883,
+      "username": "mqtt",
+      "password": ""
+    },
+    "Advanced": {
+      "max_retry": 3,
+      "retry_interval": 0.5
+    }
+  },
+  "schema": {
+    "MQTT": {
+      "server": "str",
+      "port": "port",
+      "username": "str?",
+      "password": "password?"
+    },
+    "Advanced": {
+      "max_retry": "int(0,10)",
+      "retry_interval": "float(0.1,5)"
+    }
+  }
+}
