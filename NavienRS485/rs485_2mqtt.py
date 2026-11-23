@@ -92,6 +92,9 @@ class Device:
         }
         return json_dumps(result, ensure_ascii = False)
 
+    def get_command_attr_list(self):
+        return list(self.__command_messages_map.keys())
+
     def get_status_attr_list(self):
         return list(set([status['attr_name'] for status_list in self.__status_messages_map.values() for status in status_list]))
 
@@ -131,6 +134,14 @@ class Wallpad:
 
     # ---------- 명령 재전송 ----------
     def _send_command(self, device, attr_name, value):
+        if device.device_id == '33' and attr_name == 'call':
+            packet = bytearray.fromhex(ELEVATOR_CALL_PACKET)
+            self.mqtt_client.publish(ROOT_TOPIC_NAME + '/dev/command', packet, qos = 2, retain = False)
+            log('명령 전송: 엘리베이터 호출 [%s]' % packet.hex())
+            now = time.time()
+            with self._pending_lock:
+                self._pending[('33', '01', '43')] = {'packet': packet, 'name': '엘리베이터', 'tries': 1, 'last': now, 'first': now}
+            return
         # 풍량 0 은 기기가 무시함 -> 전원 OFF 로 변환
         if attr_name == 'percentage' and value.strip() in ('0', '0.0'):
             attr_name, value = 'power', 'OFF'
@@ -182,6 +193,8 @@ class Wallpad:
                 self.mqtt_client.publish(ROOT_TOPIC_NAME + '/dev/command', item['packet'], qos = 2, retain = False)
 
     def register_mqtt_discovery(self):
+        # 예전 버전의 엘리베이터 '스위치' 엔티티 정리 (v1.2.0부터 버튼 + 상태 센서)
+        self.mqtt_client.publish(HOMEASSISTANT_ROOT_TOPIC_NAME + '/switch/rs485_33_01/config', '', qos = 1, retain = True)
         for device in self._device_list:
             if device.mqtt_discovery:
                 topic = '/'.join([HOMEASSISTANT_ROOT_TOPIC_NAME, device.device_class, device.device_unique_id, 'config'])
@@ -200,7 +213,7 @@ class Wallpad:
             return [device for device in self._device_list if device.device_id == kwargs['device_id'] and device.device_subid == kwargs['device_subid']][0]
 
     def get_topic_list_to_listen(self):
-        return ['/'.join([ROOT_TOPIC_NAME, device.device_class, device.device_name, attr_name, 'set']) for device in self._device_list for attr_name in device.get_status_attr_list()]
+        return ['/'.join([ROOT_TOPIC_NAME, device.device_class, device.device_name, attr_name, 'set']) for device in self._device_list for attr_name in set(device.get_status_attr_list() + device.get_command_attr_list())]
 
     @classmethod
     def xor(cls, hexstring_array):
@@ -256,7 +269,9 @@ class Wallpad:
 
 MAX_RETRY = int(_ADV.get('max_retry', 3)) + 1        # 최초 1회 + 재전송 횟수
 RETRY_INTERVAL = float(_ADV.get('retry_interval', 1.2)) # 응답 없으면 재전송 간격(초)
-NO_RETRY_FLAGS = ['51'] # 엘리베이터 호출은 재전송 안 함
+NO_RETRY_FLAGS = []
+# 현관 패널이 호출 버튼을 눌렀을 때 월패드 폴링에 답하는 패킷 (2026-11-23 캡처로 확인)
+ELEVATOR_CALL_PACKET = 'f7330181030024006336'
 STATUS_ACK_FLAGS = {}  # 전열교환기도 c1/c2 확인 응답을 보냄 (2026-11-23 캡처로 확인)
 
 ROOT_TOPIC_NAME = 'rs485_2mqtt'
@@ -413,13 +428,19 @@ for message_flag in ['81', 'c3', 'c4', 'c5']:
 알파룸난방.register_command(message_flag = '44', attr_name = 'targettemp', topic_class = 'temperature_command_topic', process_func = lambda v: format(int(round(float(v))), '02x'))
 알파룸난방.register_command(message_flag = '45', attr_name = 'away_mode', topic_class = 'away_mode_command_topic', process_func = lambda v: '01' if v =='ON' else '00')
 
-### 엘리베이터 ###
-# 엘리베이터, 일괄 제어 용도의 패킷이지만 엘리베이터 호출 용도로만 사용해도 무방
-optional_info = {'optimistic': 'false'}
-엘리베이터 = wallpad.add_device(device_name = '엘리베이터', device_id = '33', device_subid = '01', device_class = 'switch', optional_info = optional_info)
-엘리베이터.register_status(message_flag = '01', attr_name = 'power', topic_class ='state_topic', regex = r'(0[01])', process_func = lambda v: 'OFF')
-엘리베이터.register_status(message_flag = '01', attr_name = 'availability', topic_class ='availability_topic', regex = r'(0[01])', process_func = lambda v: 'online')
-엘리베이터.register_command(message_flag = '51', attr_name = 'power', topic_class = 'command_topic', process_func = lambda v: '1B' if v == 'ON' else '1B') # 엘리베이터 호출 # F7 33 01 43 01 10 97 16 확인 F7 33 01 51 1B 20 25 01 14 00 22 02 01 06 00 00 01 05 00 00 00 1D 00 16 05 00 05 00 00 39 01 04 8B 28
-
+### 엘리베이터 (현관 패널 0x33) ###
+# 호출 흐름 (2026-11-23 캡처)
+#   패널 -> 월패드 : f7 33 01 81 03 [00 24 00]   (평소 00 04 00, 0x20 = 호출 요청)
+#   월패드 -> 패널 : f7 33 01 43 02 [10 00]      (호출 접수)
+#   월패드 -> 패널 : f7 33 01 44 01 [01]         (호출 중, 약 2초마다)
+#   월패드 -> 패널 : f7 33 01 44 01 [05]         (도착)
+엘리베이터 = wallpad.add_device(device_name = '엘리베이터 호출', device_id = '33', device_subid = '01', device_class = 'button', optional_info = {'icon': 'mdi:elevator'})
+엘리베이터상태 = wallpad.add_device(device_name = '엘리베이터 호출 상태', device_id = '33', device_subid = '01s', device_class = 'binary_sensor', optional_info = {'icon': 'mdi:elevator-passenger'})
+엘리베이터.child_device.append(엘리베이터상태)
+엘리베이터.register_status(message_flag = '01', attr_name = 'availability', topic_class = 'availability_topic', regex = r'()', process_func = lambda v: 'online')
+엘리베이터상태.register_status(message_flag = '01', attr_name = 'availability', topic_class = 'availability_topic', regex = r'()', process_func = lambda v: 'online')
+엘리베이터상태.register_status(message_flag = '43', attr_name = 'state', topic_class = 'state_topic', regex = r'(1)', process_func = lambda v: 'ON')
+엘리베이터상태.register_status(message_flag = '44', attr_name = 'state', topic_class = 'state_topic', regex = r'([0-9a-f]{2})', process_func = lambda v: 'OFF' if v == '05' else 'ON')
+엘리베이터.register_command(message_flag = '81', attr_name = 'call', topic_class = 'command_topic', process_func = lambda v: v)
 
 wallpad.listen()
