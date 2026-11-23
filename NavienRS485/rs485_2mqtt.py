@@ -115,6 +115,8 @@ class Wallpad:
         # 명령 재전송 대기열: {(device_id, subid, ack_flag): {...}}
         self._pending = {}
         self._pending_lock = threading.Lock()
+        self._elev_last = 0       # 마지막 엘리베이터 호출 진행(43/44) 패킷 시각
+        self._elev_on = False
 
     def listen(self):
         # 브로커가 아직 안 떠 있어도 죽지 않고 계속 재접속 시도
@@ -128,6 +130,7 @@ class Wallpad:
             log('MQTT 접속 실패 rc=%s' % rc)
             return
         log('MQTT 접속 성공')
+        client.publish(ELEVATOR_STATE_TOPIC, 'OFF', qos = 1, retain = False)
         # 재접속할 때마다 discovery/구독을 다시 등록
         self.register_mqtt_discovery()
         client.subscribe([(topic, 2) for topic in [ROOT_TOPIC_NAME + '/dev/raw'] + self.get_topic_list_to_listen()])
@@ -188,6 +191,10 @@ class Wallpad:
                     item['tries'] += 1
                     item['last'] = now
                     resend.append(item)
+            if self._elev_on and now - self._elev_last > ELEVATOR_TIMEOUT:
+                self._elev_on = False
+                self.mqtt_client.publish(ELEVATOR_STATE_TOPIC, 'OFF', qos = 1, retain = False)
+                log('엘리베이터 호출 상태 자동 해제 (%d초 동안 진행 패킷 없음)' % ELEVATOR_TIMEOUT)
             for item in resend:
                 log('재전송 %d회차: %s' % (item['tries'], item['name']))
                 self.mqtt_client.publish(ROOT_TOPIC_NAME + '/dev/command', item['packet'], qos = 2, retain = False)
@@ -245,6 +252,9 @@ class Wallpad:
                         if not any(d.device_id == payload_dict['device_id'] and d.device_subid == payload_dict['device_subid'] for d in self._device_list):
                             continue
                         self._check_ack(payload_dict['device_id'], payload_dict['device_subid'], payload_dict['message_flag'])
+                        if payload_dict['device_id'] == '33' and payload_dict['message_flag'] in ('43', '44'):
+                            self._elev_last = time.time()
+                            self._elev_on = not (payload_dict['message_flag'] == '44' and payload_dict['data'][:2] == '05')
 
                         for topic, value in self.get_device(device_id = payload_dict['device_id'], device_subid = payload_dict['device_subid']).parse_payload(payload_dict).items():
                             client.publish(topic, value, qos = 1, retain = False)
@@ -272,6 +282,8 @@ RETRY_INTERVAL = float(_ADV.get('retry_interval', 1.2)) # 응답 없으면 재�
 NO_RETRY_FLAGS = []
 # 현관 패널이 호출 버튼을 눌렀을 때 월패드 폴링에 답하는 패킷 (2026-11-23 캡처로 확인)
 ELEVATOR_CALL_PACKET = 'f7330181030024006336'
+ELEVATOR_STATE_TOPIC = 'rs485_2mqtt/binary_sensor/엘리베이터 호출 상태/state'
+ELEVATOR_TIMEOUT = 10   # '오는 중'(44) 패킷은 약 2초마다 옴. 10초 동안 없으면 꺼짐 처리
 STATUS_ACK_FLAGS = {}  # 전열교환기도 c1/c2 확인 응답을 보냄 (2026-11-23 캡처로 확인)
 
 ROOT_TOPIC_NAME = 'rs485_2mqtt'
