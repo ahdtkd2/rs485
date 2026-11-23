@@ -131,6 +131,9 @@ class Wallpad:
 
     # ---------- 명령 재전송 ----------
     def _send_command(self, device, attr_name, value):
+        # 풍량 0 은 기기가 무시함 -> 전원 OFF 로 변환
+        if attr_name == 'percentage' and value.strip() in ('0', '0.0'):
+            attr_name, value = 'power', 'OFF'
         packet = device.get_command_payload_byte(attr_name, value)
         flag = device.get_command_flag(attr_name)
         self.mqtt_client.publish(ROOT_TOPIC_NAME + '/dev/command', packet, qos = 2, retain = False)
@@ -141,12 +144,22 @@ class Wallpad:
         ack_flag = format(int(flag, 16) | 0x80, '02x')
         key = (device.device_id, device.device_subid, ack_flag)
         with self._pending_lock:
-            self._pending[key] = {'packet': packet, 'name': device.device_name, 'tries': 1, 'last': time.time()}
+            now = time.time()
+            self._pending[key] = {'packet': packet, 'name': device.device_name, 'tries': 1, 'last': now, 'first': now}
 
     def _check_ack(self, device_id, subid, flag):
         with self._pending_lock:
             if self._pending.pop((device_id, subid, flag), None) is not None:
                 log('응답 확인: %s %s %s' % (device_id, subid, flag))
+                return
+            # 확인 응답(c1, c2..) 대신 상태 패킷(81)으로만 답하는 기기 처리
+            if flag in STATUS_ACK_FLAGS.get(device_id, []):
+                now = time.time()
+                for key in [k for k in self._pending if k[0] == device_id and k[1] == subid]:
+                    # 명령 직후 이미 오고 있던 상태 패킷은 무시 (0.2초 이후 것만 인정)
+                    if now - self._pending[key]['first'] >= 0.2:
+                        del self._pending[key]
+                        log('상태 응답 확인: %s %s %s' % (device_id, subid, flag))
 
     def _retry_worker(self):
         while True:
@@ -212,7 +225,12 @@ class Wallpad:
                 payload_hexstring = 'f7' + payload_raw_bytes.hex() # 'f7361f810f000001000017179817981717969896de22'
                 try:
                     if self.is_valid(payload_hexstring):
-                        payload_dict = re.match(r'f7(?P<device_id>0e|12|32|33|36)(?P<device_subid>[0-9a-f]{2})(?P<message_flag>[0-9a-f]{2})(?:[0-9a-f]{2})(?P<data>[0-9a-f]*)(?P<xor>[0-9a-f]{2})(?P<add>[0-9a-f]{2})', payload_hexstring).groupdict()
+                        m = re.match(r'f7(?P<device_id>0e|12|32|33|36)(?P<device_subid>[0-9a-f]{2})(?P<message_flag>[0-9a-f]{2})(?:[0-9a-f]{2})(?P<data>[0-9a-f]*)(?P<xor>[0-9a-f]{2})(?P<add>[0-9a-f]{2})', payload_hexstring)
+                        if m is None:      # 등록되지 않은 기기(예: 0x39 원격검침)는 무시
+                            continue
+                        payload_dict = m.groupdict()
+                        if not any(d.device_id == payload_dict['device_id'] and d.device_subid == payload_dict['device_subid'] for d in self._device_list):
+                            continue
                         self._check_ack(payload_dict['device_id'], payload_dict['device_subid'], payload_dict['message_flag'])
 
                         for topic, value in self.get_device(device_id = payload_dict['device_id'], device_subid = payload_dict['device_subid']).parse_payload(payload_dict).items():
@@ -220,7 +238,8 @@ class Wallpad:
                     else:
                         continue
                 except Exception as e:
-                    client.publish(ROOT_TOPIC_NAME + '/dev/error', payload_hexstring, qos = 1, retain = True)
+                    client.publish(ROOT_TOPIC_NAME + '/dev/error', payload_hexstring, qos = 0, retain = False)
+                    log('패킷 해석 실패: %s (%s)' % (payload_hexstring, e))
 
         else: # homeassistant에서 명령하여 MQTT topic을 publish하는 경우
             try:
@@ -236,8 +255,9 @@ class Wallpad:
         log('MQTT 연결 끊김 rc=%s, 재접속 시도' % rc)
 
 MAX_RETRY = int(_ADV.get('max_retry', 3)) + 1        # 최초 1회 + 재전송 횟수
-RETRY_INTERVAL = float(_ADV.get('retry_interval', 0.5)) # 응답 없으면 재전송 간격(초)
+RETRY_INTERVAL = float(_ADV.get('retry_interval', 1.2)) # 응답 없으면 재전송 간격(초)
 NO_RETRY_FLAGS = ['51'] # 엘리베이터 호출은 재전송 안 함
+STATUS_ACK_FLAGS = {}  # 전열교환기도 c1/c2 확인 응답을 보냄 (2026-11-23 캡처로 확인)
 
 ROOT_TOPIC_NAME = 'rs485_2mqtt'
 HOMEASSISTANT_ROOT_TOPIC_NAME = 'homeassistant'
@@ -250,12 +270,12 @@ packet_2_payload_oscillation = {'03': 'oscillate_on', '00': 'oscillation_off', '
 optional_info = {'optimistic': 'false', 'speed_range_min': 1, 'speed_range_max': 3}
 전열교환기 = wallpad.add_device(device_name = '전열교환기', device_id = '32', device_subid = '01', device_class = 'fan', optional_info = optional_info)
 전열교환기.register_status(message_flag = '01', attr_name = 'availability', topic_class ='availability_topic',      regex = r'()', process_func = lambda v: 'online')
-전열교환기.register_status(message_flag = '81', attr_name = 'power',        topic_class ='state_topic',             regex = r'00(0[01])0[0-3]0[013]00', process_func = lambda v: 'ON' if v == '01' else 'OFF')
-전열교환기.register_status(message_flag = 'c1', attr_name = 'power',        topic_class ='state_topic',             regex = r'00(0[01])0[0-3]0[013]00', process_func = lambda v: 'ON' if v == '01' else 'OFF')
-전열교환기.register_status(message_flag = '81', attr_name = 'percentage',   topic_class ='percentage_state_topic',  regex = r'000[01](0[0-3])0[013]00', process_func = lambda v: packet_2_payload_percentage[v])
-전열교환기.register_status(message_flag = 'c2', attr_name = 'percentage',   topic_class ='percentage_state_topic',  regex = r'000[01](0[0-3])0[013]00', process_func = lambda v: packet_2_payload_percentage[v])
-전열교환기.register_status(message_flag = '81', attr_name = 'heat',         topic_class ='oscillation_state_topic', regex = r'000[01]0[0-3](0[013])00', process_func = lambda v: packet_2_payload_oscillation[v])
-전열교환기.register_status(message_flag = 'c3', attr_name = 'heat',         topic_class ='oscillation_state_topic', regex = r'000[01]0[0-3](0[013])00', process_func = lambda v: packet_2_payload_oscillation[v])
+전열교환기.register_status(message_flag = '81', attr_name = 'power',        topic_class ='state_topic',             regex = r'00(0[01])0[0-3][0-9a-f]{2}00', process_func = lambda v: 'ON' if v == '01' else 'OFF')
+전열교환기.register_status(message_flag = 'c1', attr_name = 'power',        topic_class ='state_topic',             regex = r'00(0[01])0[0-3][0-9a-f]{2}00', process_func = lambda v: 'ON' if v == '01' else 'OFF')
+전열교환기.register_status(message_flag = '81', attr_name = 'percentage',   topic_class ='percentage_state_topic',  regex = r'000[01](0[0-3])[0-9a-f]{2}00', process_func = lambda v: packet_2_payload_percentage[v])
+전열교환기.register_status(message_flag = 'c2', attr_name = 'percentage',   topic_class ='percentage_state_topic',  regex = r'000[01](0[0-3])[0-9a-f]{2}00', process_func = lambda v: packet_2_payload_percentage[v])
+전열교환기.register_status(message_flag = '81', attr_name = 'heat',         topic_class ='oscillation_state_topic', regex = r'000[01]0[0-3]([0-9a-f]{2})00', process_func = lambda v: 'oscillate_on' if v == '03' else 'oscillate_off')
+전열교환기.register_status(message_flag = 'c3', attr_name = 'heat',         topic_class ='oscillation_state_topic', regex = r'000[01]0[0-3]([0-9a-f]{2})00', process_func = lambda v: 'oscillate_on' if v == '03' else 'oscillate_off')
 
 전열교환기.register_command(message_flag = '41', attr_name = 'power',       topic_class = 'command_topic', process_func = lambda v: '01' if v =='ON' else '00')
 전열교환기.register_command(message_flag = '42', attr_name = 'percentage',  topic_class = 'percentage_command_topic', process_func = lambda v: {payload: packet for packet, payload in packet_2_payload_percentage.items()}[v])

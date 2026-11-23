@@ -1,9 +1,12 @@
 {
   "name": "Navien Wallpad Controller with RS485(EW11)",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "slug": "navien_wallpad",
   "description": "Navien Wallpad Controller for Homeassistant (EW11 MQTT)",
-  "arch": ["armhf", "armv7", "aarch64", "amd64", "i386"],
+  "arch": [
+    "amd64",
+    "aarch64"
+  ],
   "url": "https://github.com/ahdtkd2/rs485",
   "startup": "application",
   "boot": "auto",
@@ -16,7 +19,7 @@
     },
     "Advanced": {
       "max_retry": 3,
-      "retry_interval": 0.5
+      "retry_interval": 1.2
     }
   },
   "schema": {
